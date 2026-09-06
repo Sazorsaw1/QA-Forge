@@ -7,10 +7,10 @@ import type {
 } from "../types";
 import { PACK_FIELDS } from "../types";
 import { createRng } from "./rng";
-import { defaultExpect, generateField } from "./fields";
+import { defaultExpect, generateField, type FieldValue } from "./fields";
 import { curatedPackRows } from "./packs";
 
-function resolveFields(pack: PackId, customFields: FieldId[]): FieldId[] {
+export function resolveFields(pack: PackId, customFields: FieldId[]): FieldId[] {
   if (pack === "custom") {
     return customFields.length > 0 ? customFields : ["email", "password"];
   }
@@ -95,6 +95,57 @@ export function generateRows(options: GenerateOptions): GeneratedRow[] {
   }
 
   return rows.slice(0, count);
+}
+
+/** Stable sub-seed from main seed + row index + field key (deterministic re-roll). */
+export function deriveSubSeed(seed: number, rowIndex: number, fieldKey: string): number {
+  let h = (seed >>> 0) ^ Math.imul(rowIndex + 1, 0x9e3779b9);
+  for (let i = 0; i < fieldKey.length; i++) {
+    h = Math.imul(h ^ fieldKey.charCodeAt(i), 0x85ebca6b);
+    h = (h << 13) | (h >>> 19);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15;
+  return (h >>> 0) || 1;
+}
+
+/** Re-generate one field using seed+row+field sub-seed (same inputs → same value). */
+export function regenerateFieldValue(
+  field: FieldId,
+  options: Pick<GenerateOptions, "locale" | "seed">,
+  rowIndex: number,
+  kind: CaseKind,
+  ctx: { password?: string } = {},
+): FieldValue {
+  const rng = createRng(deriveSubSeed(options.seed, rowIndex, field));
+  return generateField(field, rng, options.locale, kind, ctx);
+}
+
+/**
+ * Regenerate all rows from options, preserving locked field values from previous rows
+ * (matched by row index). Unlocked fields and metadata come from the new generation.
+ */
+export function regenerateRowsRespectingLocks(
+  options: GenerateOptions,
+  previous: GeneratedRow[],
+  lockedKeys: ReadonlySet<string>,
+): GeneratedRow[] {
+  const next = generateRows(options);
+  return next.map((row, i) => {
+    const prev = previous[i];
+    if (!prev) return row;
+    const merged: GeneratedRow = { ...row };
+    const skip = new Set(["id", "case", "tags", "expectHint"]);
+    for (const key of Object.keys(prev)) {
+      if (skip.has(key)) continue;
+      const lockId = `${i}:${key}`;
+      if (lockedKeys.has(lockId) && key in prev) {
+        merged[key] = prev[key];
+      }
+    }
+    return merged;
+  });
 }
 
 export { createRng } from "./rng";

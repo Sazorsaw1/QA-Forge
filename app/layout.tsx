@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QA Forge — Fake data for QA & Playwright",
+  title: "QA Forge — Generate, edit, write Playwright",
   description:
-    "Client-side seeded fake data generator for QA and Playwright. Valid, boundary, and invalid packs with JSON, CSV, and TypeScript exports.",
+    "Generate realistic form data. Edit it. Write the Playwright yourself. Seeded client-side packs for valid, boundary, and invalid QA cases.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
